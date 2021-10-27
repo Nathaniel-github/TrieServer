@@ -136,15 +136,16 @@ if __name__ == '__main__':
 
     trie = get_new_level()
     q = Queue()
-    HOST = '127.0.0.1'
-    PORT = 65436
+    IP = ''
+    PORT = 61135
     all_words = []
 
     Thread(target=queue_reader, args=(q,)).start()
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, PORT))
+        s.bind((IP, PORT))
         s.listen()
+        print(s.getsockname())
         while True:
             connection, address = s.accept()
             print('Connected by', address)
