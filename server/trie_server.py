@@ -2,6 +2,7 @@ import socket
 from queue import Queue
 from threading import Thread
 import ast
+from struct import unpack
 
 
 def get_new_level() -> dict:
@@ -238,14 +239,15 @@ if __name__ == '__main__':
             connection, address = s.accept()
             try:
                 print('Connected by', address)
-                data = []
-                buffer_size = 4096
-                while True:
-                    part = connection.recv(buffer_size)
-                    if not part:
-                        break
-                    data.append(part)
-                data = ast.literal_eval(b''.join(data).decode(encoding='utf8'))
+                (size,) = unpack('>Q', connection.recv(8))
+                data = b''
+                print(size)
+                while len(data) < size:
+                    print("here")
+                    left = size - len(data)
+                    data += connection.recv(1024 if left > 1024 else left+5)
+                    print(data)
+                data = ast.literal_eval(data.decode(encoding='utf8'))
                 q.put(ClientHandler(connection, address, data))
                 print(f"Added {data} to queue")
             except Exception as e:
