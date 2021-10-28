@@ -1,6 +1,3 @@
-server package
-==============
-
 server.trie\_server module
 ==========================
 
