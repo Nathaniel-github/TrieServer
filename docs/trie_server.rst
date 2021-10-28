@@ -1,9 +1,6 @@
 server package
 ==============
 
-Submodules
-----------
-
 server.trie\_server module
 ==========================
 
@@ -15,7 +12,7 @@ server.trie\_server module
 Module contents
 ---------------
 
-.. automodule:: cli
+.. automodule:: server
    :members:
    :undoc-members:
    :show-inheritance:
