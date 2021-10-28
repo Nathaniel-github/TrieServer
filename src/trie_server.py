@@ -26,12 +26,12 @@ def add_to_trie(word: str):
     for k in range(length):
         letter = word[k]
         if not (letter in lv):
-            if k != length-1:
+            if k != length - 1:
                 lv[letter] = get_new_level()
             else:
                 lv[letter] = get_final_level()
             lv['size'] += 1
-        if k == length-1:
+        if k == length - 1:
             lv[letter]['end'] = True
         lv = lv[letter]
 
@@ -52,12 +52,16 @@ def recursive_delete(lv: dict, word: str, length: int, i: int) -> tuple:
     answer = recursive_delete(next_lv, word, length, i + 1)
     if answer[0]:
         pop_layer_safe(lv, word[i])
-        if lv['size'] == 0:
+        if lv['size'] == 0 and lv.get('end') is None:
             return True, True
     return False, answer[1]
 
 
 def delete_from_trie(word: str) -> bool:
+    if word in all_words:
+        all_words.remove(word)
+    else:
+        return False
     return recursive_delete(trie, word, len(word), 0)[1]
 
 
@@ -107,7 +111,8 @@ class ClientHandler:
             if success:
                 self.conn.sendall(bytes(f'Successfully deleted {self.packet[1]}', encoding='utf8'))
             else:
-                self.conn.sendall(bytes(f'Could not delete {self.packet[1]} because it does not exist', encoding='utf8'))
+                self.conn.sendall(
+                    bytes(f'Could not delete {self.packet[1]} because it does not exist', encoding='utf8'))
         elif self.packet[0] == 'Search for keyword':
             answer = search_trie(self.packet[1])
             if not answer:
@@ -119,7 +124,8 @@ class ClientHandler:
             if not answer:
                 self.conn.sendall(bytes(f'The prefix {self.packet[1]} does not exist', encoding='utf8'))
             else:
-                self.conn.sendall(bytes(f'Words that complete the prefix {self.packet[1]} include {answer}', encoding='utf8'))
+                self.conn.sendall(
+                    bytes(f'Words that complete the prefix {self.packet[1]} include {answer}', encoding='utf8'))
         elif self.packet[0] == 'Display trie fast':
             self.conn.sendall(bytes(str(all_words), encoding='utf8'))
         else:
@@ -128,8 +134,11 @@ class ClientHandler:
 
 def queue_reader(queue: Queue):
     while True:
-        queue.get().execute()
-        print(f"State of trie: {trie}")
+        try:
+            queue.get().execute()
+            print(f"State of trie: {trie}")
+        except Exception as ex:
+            print(ex)
 
 
 if __name__ == '__main__':
@@ -148,7 +157,17 @@ if __name__ == '__main__':
         print(s.getsockname())
         while True:
             connection, address = s.accept()
-            print('Connected by', address)
-            data = ast.literal_eval(connection.recv(1024).decode('utf8'))
-            q.put(ClientHandler(connection, address, data))
-            print(f"Added {data} to queue")
+            try:
+                print('Connected by', address)
+                data = []
+                buffer_size = 4096
+                while True:
+                    part = connection.recv(buffer_size)
+                    if not part:
+                        break
+                    data.append(part)
+                ast.literal_eval(b''.join(data).decode(encoding='utf8'))
+                q.put(ClientHandler(connection, address, data))
+                print(f"Added {data} to queue")
+            except Exception as e:
+                print(e)
