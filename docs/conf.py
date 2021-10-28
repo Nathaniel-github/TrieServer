@@ -17,12 +17,12 @@ sys.path.insert(0, os.path.abspath('..'))
 
 # -- Project information -----------------------------------------------------
 
-project = 'Trie CLI'
+project = 'Trie Server'
 copyright = '2021, Nathaniel Thomas'
 author = 'Nathaniel Thomas'
 
 # The full version, including alpha/beta/rc tags
-release = '0.0.5'
+release = '0.0.1'
 
 
 # -- General configuration ---------------------------------------------------
