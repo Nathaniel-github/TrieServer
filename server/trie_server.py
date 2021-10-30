@@ -1,8 +1,23 @@
 import socket
 from queue import Queue
-from threading import Thread
+from threading import Thread, Event
 import ast
 from struct import unpack
+import pickle
+from pathlib import Path
+
+
+if Path('save_trie.pkl').is_file():
+    with open('save_trie.pkl', 'rb') as f:
+        trie = pickle.load(f)
+else:
+    trie = {'size': 0}
+q = Queue()
+if Path('save_words.pkl').is_file():
+    with open('save_words.pkl', 'rb') as f:
+        all_words = pickle.load(f)
+else:
+    all_words = []
 
 
 def get_new_level() -> dict:
@@ -42,8 +57,10 @@ def add_to_trie(word: str):
     Args:
         word (str): The word that should be added to the trie
     """
+    global all_words
+    global trie
     all_words.append(word)
-    lv = trie
+    lv: dict = trie
     length = len(word)
     for k in range(length):
         letter = word[k]
@@ -56,6 +73,14 @@ def add_to_trie(word: str):
         if k == length - 1:
             lv[letter]['end'] = True
         lv = lv[letter]
+
+
+def delete_all_trie():
+    """Deletes all values from the trie"""
+    global trie
+    global all_words
+    trie = get_new_level()
+    all_words = []
 
 
 def recursive_delete(lv: dict, word: str, length: int, i: int) -> tuple:
@@ -99,6 +124,8 @@ def delete_from_trie(word: str) -> bool:
         bool: Whether or not the deletion was successful (failing the delete means it wasn't a word that existed
         in the trie)
     """
+    global all_words
+    global trie
     if word in all_words:
         all_words.remove(word)
     else:  # can be removed since the recursive call will return false if need be but just makes things faster
@@ -114,6 +141,7 @@ def search_trie(word: str) -> bool:
     Returns:
         bool: Whether or not the given word was found to be placed into the trie
     """
+    global trie
     lv = trie
     for letter in word:
         lv = lv.get(letter)
@@ -153,6 +181,7 @@ def autocomplete(prefix: str):
     Returns:
         Any: Either a boolean that states there were no matches for the prefix or a list of matches
     """
+    global trie
     lv = trie
     for letter in prefix:
         lv = lv.get(letter)
@@ -169,15 +198,16 @@ class ClientHandler:
         add: The address of the client that made the request
         packet: The tuple that represents the client's request
     """
-
     def __init__(self, conn: socket.socket, add, packet: tuple):
         """Initializes the class with the socket, address, and packet"""
         self.conn = conn
         self.add = add
         self.packet = packet
 
-    def execute(self):
+    def execute(self) -> None:
         """Executes the packet this handler was instantiated with"""
+        global trie
+        global all_words
         if self.packet[0] == 'Add keyword':
             add_to_trie(self.packet[1])
             self.conn.sendall(bytes(f'Successfully added {self.packet[1]}', encoding='utf8'))
@@ -188,6 +218,9 @@ class ClientHandler:
             else:
                 self.conn.sendall(
                     bytes(f'Could not delete {self.packet[1]} because it does not exist', encoding='utf8'))
+        elif self.packet[0] == 'Delete all':
+            delete_all_trie()
+            self.conn.sendall(bytes('Deleted all values from the trie', encoding='utf8'))
         elif self.packet[0] == 'Search for keyword':
             answer = search_trie(self.packet[1])
             if not answer:
@@ -207,29 +240,54 @@ class ClientHandler:
             self.conn.sendall(bytes(str(find_words(trie, '')), encoding='utf8'))
 
 
-def queue_reader(queue: Queue):
+class AutoSaver(Thread):
+    """A class to encapsulate individual clients and their requests into the queue
+
+    Attributes:
+        interval: The amount of time between triggers
+        ev: An event object to wait on
+    """
+    def __init__(self, interval: int = 60):
+        """Initializes the class with the interval and event object"""
+        Thread.__init__(self)
+        self.interval = interval
+        self.ev = Event()
+
+    def run(self):
+        """Starts the saving loop once the thread is initialized"""
+        while not self.ev.wait(self.interval):
+            print('Saving objects')
+            with open('save_trie.pkl', 'wb') as file:
+                pickle.dump(trie, file)
+            with open('save_words.pkl', 'wb') as file:
+                pickle.dump(all_words, file)
+            print('Objects saved!')
+
+
+def queue_reader(queue: Queue) -> None:
     """Constantly reads from the queue
 
     Args:
         queue (Queue): The queue to be read from
     """
+    global trie
     while True:
+        packet: ClientHandler = queue.get()
         try:
-            queue.get().execute()
+            packet.execute()
             print(f"State of trie: {trie}")
         except Exception as ex:
             print(ex)
+            packet.conn.sendall(bytes(f'An error occurred: {ex}', encoding='utf8'))
 
 
 if __name__ == '__main__':
 
-    trie = get_new_level()
-    q = Queue()
     IP = ''
     PORT = 61135
-    all_words = []
 
     Thread(target=queue_reader, args=(q,)).start()
+    AutoSaver().start()
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((IP, PORT))
@@ -243,12 +301,12 @@ if __name__ == '__main__':
                 data = b''
                 print(size)
                 while len(data) < size:
-                    print("here")
                     left = size - len(data)
-                    data += connection.recv(1024 if left > 1024 else left+5)
+                    data += connection.recv(1024 if left > 1024 else left + 5)
                     print(data)
                 data = ast.literal_eval(data.decode(encoding='utf8'))
                 q.put(ClientHandler(connection, address, data))
                 print(f"Added {data} to queue")
             except Exception as e:
                 print(e)
+                connection.sendall(bytes(f'An error occurred: {e}', encoding='utf8'))
