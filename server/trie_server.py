@@ -248,7 +248,7 @@ class ClientHandler:
 
 
 class AutoSaver(Thread):
-    """A class to encapsulate individual clients and their requests into the queue
+    """A class to automatically save the state of the trie and words stored in it
 
     Attributes:
         interval: The amount of time between triggers
