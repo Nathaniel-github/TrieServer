@@ -2,10 +2,9 @@ import socket
 from queue import Queue
 from threading import Thread, Event
 import ast
-from struct import unpack
+from struct import unpack, pack
 import pickle
 from pathlib import Path
-
 
 if Path('save_trie.pkl').is_file():
     with open('save_trie.pkl', 'rb') as f:
@@ -38,6 +37,13 @@ def pop_layer_safe(lv: dict, pop_key: str):
     """
     lv.pop(pop_key)
     lv['size'] -= 1
+
+
+def full_send(conn: socket.socket, data_: bytes) -> None:
+    size_ = pack('>Q', len(data_))
+    print(f'Size: {size}')
+    conn.sendall(size_)
+    conn.sendall(data_)
 
 
 def get_final_level() -> dict:
@@ -198,6 +204,7 @@ class ClientHandler:
         add: The address of the client that made the request
         packet: The tuple that represents the client's request
     """
+
     def __init__(self, conn: socket.socket, add, packet: tuple):
         """Initializes the class with the socket, address, and packet"""
         self.conn = conn
@@ -210,34 +217,34 @@ class ClientHandler:
         global all_words
         if self.packet[0] == 'Add keyword':
             add_to_trie(self.packet[1])
-            self.conn.sendall(bytes(f'Successfully added {self.packet[1]}', encoding='utf8'))
+            full_send(self.conn, bytes(f'Successfully added {self.packet[1]}', encoding='utf8'))
         elif self.packet[0] == 'Delete keyword':
             success = delete_from_trie(self.packet[1])
             if success:
-                self.conn.sendall(bytes(f'Successfully deleted {self.packet[1]}', encoding='utf8'))
+                full_send(self.conn, bytes(f'Successfully deleted {self.packet[1]}', encoding='utf8'))
             else:
-                self.conn.sendall(
-                    bytes(f'Could not delete {self.packet[1]} because it does not exist', encoding='utf8'))
+                full_send(self.conn,
+                          bytes(f'Could not delete {self.packet[1]} because it does not exist', encoding='utf8'))
         elif self.packet[0] == 'Delete all':
             delete_all_trie()
-            self.conn.sendall(bytes('Deleted all values from the trie', encoding='utf8'))
+            full_send(self.conn, bytes('Deleted all values from the trie', encoding='utf8'))
         elif self.packet[0] == 'Search for keyword':
             answer = search_trie(self.packet[1])
             if not answer:
-                self.conn.sendall(bytes(f'The keyword {self.packet[1]} does not exist', encoding='utf8'))
+                full_send(self.conn, bytes(f'The keyword {self.packet[1]} does not exist', encoding='utf8'))
             else:
-                self.conn.sendall(bytes(f'The keyword {self.packet[1]} exists', encoding='utf8'))
+                full_send(self.conn, bytes(f'The keyword {self.packet[1]} exists', encoding='utf8'))
         elif self.packet[0] == 'Autocomplete by prefix':
             answer = autocomplete(self.packet[1])
             if not answer:
-                self.conn.sendall(bytes(f'The prefix {self.packet[1]} does not exist', encoding='utf8'))
+                full_send(self.conn, bytes(f'The prefix {self.packet[1]} does not exist', encoding='utf8'))
             else:
-                self.conn.sendall(
-                    bytes(f'Words that complete the prefix {self.packet[1]} include {answer}', encoding='utf8'))
+                full_send(self.conn,
+                          bytes(f'Words that complete the prefix {self.packet[1]} include {answer}', encoding='utf8'))
         elif self.packet[0] == 'Display trie fast':
-            self.conn.sendall(bytes(str(all_words), encoding='utf8'))
+            full_send(self.conn, bytes(str(all_words), encoding='utf8'))
         else:
-            self.conn.sendall(bytes(str(find_words(trie, '')), encoding='utf8'))
+            full_send(self.conn, bytes(str(find_words(trie, '')), encoding='utf8'))
 
 
 class AutoSaver(Thread):
@@ -247,6 +254,7 @@ class AutoSaver(Thread):
         interval: The amount of time between triggers
         ev: An event object to wait on
     """
+
     def __init__(self, interval: int = 60):
         """Initializes the class with the interval and event object"""
         Thread.__init__(self)
@@ -278,7 +286,7 @@ def queue_reader(queue: Queue) -> None:
             print(f"State of trie: {trie}")
         except Exception as ex:
             print(ex)
-            packet.conn.sendall(bytes(f'An error occurred: {ex}', encoding='utf8'))
+            full_send(packet.conn, bytes(f'An error occurred: {ex}', encoding='utf8'))
 
 
 if __name__ == '__main__':
@@ -299,14 +307,12 @@ if __name__ == '__main__':
                 print('Connected by', address)
                 (size,) = unpack('>Q', connection.recv(8))
                 data = b''
-                print(size)
                 while len(data) < size:
                     left = size - len(data)
                     data += connection.recv(1024 if left > 1024 else left + 5)
-                    print(data)
                 data = ast.literal_eval(data.decode(encoding='utf8'))
                 q.put(ClientHandler(connection, address, data))
                 print(f"Added {data} to queue")
             except Exception as e:
                 print(e)
-                connection.sendall(bytes(f'An error occurred: {e}', encoding='utf8'))
+                full_send(connection, bytes(f'An error occurred: {e}', encoding='utf8'))
