@@ -132,10 +132,15 @@ def delete_from_trie(word: str) -> bool:
     """
     global all_words
     global trie
-    if word in all_words:
-        all_words.remove(word)
-    else:  # can be removed since the recursive call will return false if need be but just makes things faster
+    index = None
+    for i in range(len(all_words)):
+        cur_word = all_words[i]
+        if cur_word == word:
+            index = i
+    if index is None:
         return False
+    else:
+        del all_words[index]
     return recursive_delete(trie, word, len(word), 0)[1]
 
 
