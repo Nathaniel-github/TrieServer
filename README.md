@@ -16,7 +16,7 @@
     <img src="https://raw.githubusercontent.com/Nathaniel-github/TrieServer/main/imgs/trie.png" alt="Logo" width="200" height="200">
   </a>
 
-<h3 align="center">Trie Client</h3>
+<h3 align="center">Trie Server</h3>
 
   <p align="center">
     The server code for my globally hosted trie through GCP
