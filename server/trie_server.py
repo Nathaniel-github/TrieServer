@@ -260,7 +260,7 @@ class AutoSaver(Thread):
         ev: An event object to wait on
     """
 
-    def __init__(self, interval: int = 60):
+    def __init__(self, interval: int = 3600):
         """Initializes the class with the interval and event object"""
         Thread.__init__(self)
         self.interval = interval
